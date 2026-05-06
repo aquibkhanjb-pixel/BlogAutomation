@@ -515,15 +515,8 @@ def generate_and_place_images(state: State) -> dict:
             try:
                 img_bytes = _gemini_generate_image_bytes(spec["prompt"])
                 out_path.write_bytes(img_bytes)
-            except Exception as e:
-                # graceful fallback: keep doc usable
-                prompt_block = (
-                    f"> **[IMAGE GENERATION FAILED]** {spec.get('caption','')}\n>\n"
-                    f"> **Alt:** {spec.get('alt','')}\n>\n"
-                    f"> **Prompt:** {spec.get('prompt','')}\n>\n"
-                    f"> **Error:** {e}\n"
-                )
-                md = md.replace(placeholder, prompt_block)
+            except Exception:
+                md = md.replace(placeholder, "")
                 continue
 
         img_md = f"![{spec['alt']}](images/{filename})\n*{spec['caption']}*"
