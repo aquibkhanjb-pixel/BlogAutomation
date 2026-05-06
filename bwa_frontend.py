@@ -265,153 +265,162 @@ GLOBAL_CSS = """
 
 html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    color-scheme: light !important;
 }
 
 /* ── Page background ── */
 .stApp {
-    background: linear-gradient(160deg, #060610 0%, #0c0c1d 45%, #111122 100%);
+    background: linear-gradient(160deg, #f0f4ff 0%, #f8f7ff 50%, #fdf4ff 100%) !important;
 }
 
 /* ── Hero ── */
 .hero { text-align:center; padding:2.2rem 1rem 1.2rem; }
 .hero-title {
     font-size: 2.6rem; font-weight: 800; margin:0 0 .4rem;
-    background: linear-gradient(135deg, #818cf8 0%, #a78bfa 45%, #f472b6 100%);
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #db2777 100%);
     -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
     letter-spacing: -0.04em; line-height:1.1;
 }
-.hero-sub { color:#475569; font-size:.95rem; font-weight:400; margin:0; }
+.hero-sub { color:#64748b; font-size:.95rem; font-weight:400; margin:0; }
 
 /* ── Sidebar ── */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg,#08081a 0%,#0b0b1c 100%) !important;
-    border-right: 1px solid rgba(129,140,248,.1) !important;
+    background: linear-gradient(180deg,#f5f3ff 0%,#faf5ff 100%) !important;
+    border-right: 1px solid rgba(99,102,241,.15) !important;
 }
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 { color:#c7d2fe !important; }
+[data-testid="stSidebar"] h3 { color:#3730a3 !important; }
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] label { color:#374151 !important; }
 
 /* ── Primary button ── */
 .stButton > button[kind="primary"],
 .stButton > button[data-testid*="primary"] {
-    width:100%; background:linear-gradient(135deg,#6366f1,#8b5cf6) !important;
+    width:100%; background:linear-gradient(135deg,#4f46e5,#7c3aed) !important;
     border:none !important; border-radius:10px !important; font-weight:700 !important;
     font-size:.9rem !important; letter-spacing:.02em !important;
-    box-shadow:0 4px 22px rgba(99,102,241,.4) !important;
+    box-shadow:0 4px 18px rgba(79,70,229,.3) !important;
     transition:all .25s cubic-bezier(.4,0,.2,1) !important; color:#fff !important;
 }
 .stButton > button[kind="primary"]:hover {
     transform:translateY(-2px) !important;
-    box-shadow:0 8px 30px rgba(99,102,241,.6) !important;
+    box-shadow:0 8px 26px rgba(79,70,229,.45) !important;
 }
 .stButton > button[kind="primary"]:active { transform:translateY(0) !important; }
 
 /* ── Secondary buttons ── */
 .stButton > button:not([kind="primary"]) {
-    background:rgba(255,255,255,.05) !important;
-    border:1px solid rgba(255,255,255,.1) !important;
-    border-radius:8px !important; color:#94a3b8 !important;
+    background:#ffffff !important;
+    border:1px solid #e2e8f0 !important;
+    border-radius:8px !important; color:#475569 !important;
     font-weight:500 !important; transition:all .2s ease !important;
 }
 .stButton > button:not([kind="primary"]):hover {
-    background:rgba(255,255,255,.09) !important;
-    border-color:rgba(129,140,248,.4) !important; color:#c7d2fe !important;
+    background:#f5f3ff !important;
+    border-color:rgba(99,102,241,.4) !important; color:#4f46e5 !important;
 }
 
 /* ── Download buttons ── */
 .stDownloadButton > button {
     border-radius:8px !important;
-    background:rgba(16,185,129,.1) !important;
-    border:1px solid rgba(16,185,129,.3) !important;
-    color:#6ee7b7 !important; font-weight:500 !important;
+    background:rgba(16,185,129,.08) !important;
+    border:1px solid rgba(16,185,129,.35) !important;
+    color:#065f46 !important; font-weight:500 !important;
     transition:all .2s ease !important;
 }
 .stDownloadButton > button:hover {
-    background:rgba(16,185,129,.18) !important;
-    border-color:rgba(16,185,129,.5) !important;
+    background:rgba(16,185,129,.15) !important;
+    border-color:rgba(16,185,129,.55) !important;
 }
 
 /* ── Tabs ── */
 .stTabs [data-baseweb="tab-list"] {
-    background:rgba(255,255,255,.03) !important; border-radius:12px !important;
-    padding:4px !important; border:1px solid rgba(255,255,255,.06) !important; gap:2px !important;
+    background:#f1f5f9 !important; border-radius:12px !important;
+    padding:4px !important; border:1px solid #e2e8f0 !important; gap:2px !important;
 }
 .stTabs [data-baseweb="tab"] {
     border-radius:8px !important; font-weight:500 !important; font-size:.88rem !important;
     color:#64748b !important; padding:.4rem .8rem !important; transition:all .2s ease !important;
 }
 .stTabs [aria-selected="true"] {
-    background:rgba(99,102,241,.18) !important;
-    color:#a5b4fc !important; font-weight:600 !important;
+    background:#fff !important; color:#4f46e5 !important;
+    font-weight:600 !important;
+    box-shadow:0 1px 4px rgba(0,0,0,.08) !important;
 }
 
 /* ── Inputs ── */
 .stTextInput input, .stTextArea textarea {
-    background:rgba(255,255,255,.04) !important;
-    border:1px solid rgba(255,255,255,.1) !important;
-    border-radius:8px !important; color:#e2e8f0 !important;
+    background:#ffffff !important;
+    border:1px solid #e2e8f0 !important;
+    border-radius:8px !important; color:#1e293b !important;
 }
 .stTextInput input:focus, .stTextArea textarea:focus {
-    border-color:rgba(99,102,241,.5) !important;
-    box-shadow:0 0 0 3px rgba(99,102,241,.15) !important;
+    border-color:rgba(79,70,229,.5) !important;
+    box-shadow:0 0 0 3px rgba(79,70,229,.12) !important;
     outline:none !important;
 }
 
 /* ── Selectbox ── */
 [data-testid="stSelectbox"] > div > div {
-    background:rgba(255,255,255,.04) !important;
-    border:1px solid rgba(255,255,255,.1) !important;
-    border-radius:8px !important;
+    background:#ffffff !important;
+    border:1px solid #e2e8f0 !important;
+    border-radius:8px !important; color:#1e293b !important;
 }
 
 /* ── Metrics ── */
 [data-testid="stMetric"] {
-    background:rgba(255,255,255,.03) !important;
-    border:1px solid rgba(255,255,255,.07) !important;
+    background:#ffffff !important;
+    border:1px solid #e9ecf5 !important;
     border-radius:12px !important; padding:1rem 1.2rem !important;
+    box-shadow:0 1px 4px rgba(0,0,0,.05) !important;
 }
-[data-testid="stMetricValue"] { font-weight:700 !important; color:#a5b4fc !important; }
+[data-testid="stMetricValue"] { font-weight:700 !important; color:#4f46e5 !important; }
 [data-testid="stMetricLabel"] { color:#64748b !important; font-size:.8rem !important; }
 
 /* ── DataFrame ── */
 [data-testid="stDataFrame"] {
     border-radius:12px !important; overflow:hidden !important;
-    border:1px solid rgba(255,255,255,.07) !important;
+    border:1px solid #e2e8f0 !important;
+    box-shadow:0 1px 4px rgba(0,0,0,.05) !important;
 }
 
 /* ── Status ── */
 [data-testid="stStatus"] {
-    border-radius:12px !important; background:rgba(255,255,255,.02) !important;
-    border:1px solid rgba(255,255,255,.07) !important;
+    border-radius:12px !important; background:#ffffff !important;
+    border:1px solid #e2e8f0 !important;
+    box-shadow:0 1px 4px rgba(0,0,0,.05) !important;
 }
 
 /* ── Expander ── */
 [data-testid="stExpander"] {
-    border:1px solid rgba(255,255,255,.07) !important;
-    border-radius:12px !important; background:rgba(255,255,255,.02) !important;
+    border:1px solid #e2e8f0 !important;
+    border-radius:12px !important; background:#ffffff !important;
+    box-shadow:0 1px 4px rgba(0,0,0,.04) !important;
 }
 
 /* ── Alerts ── */
 [data-testid="stAlert"] { border-radius:10px !important; }
 
 /* ── HR ── */
-hr { border:none !important; border-top:1px solid rgba(255,255,255,.06) !important; margin:1.2rem 0 !important; }
+hr { border:none !important; border-top:1px solid #e9ecf5 !important; margin:1.2rem 0 !important; }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width:5px; height:5px; }
-::-webkit-scrollbar-track { background:transparent; }
-::-webkit-scrollbar-thumb { background:rgba(99,102,241,.3); border-radius:3px; }
-::-webkit-scrollbar-thumb:hover { background:rgba(99,102,241,.5); }
+::-webkit-scrollbar-track { background:#f1f5f9; }
+::-webkit-scrollbar-thumb { background:rgba(99,102,241,.25); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:rgba(99,102,241,.45); }
 
 /* ─────────────────────────────────────────────────────────── */
 /*  PIPELINE ANIMATION                                         */
 /* ─────────────────────────────────────────────────────────── */
 .pipeline-shell {
     padding:1.2rem 1rem;
-    background:rgba(255,255,255,.025);
-    border:1px solid rgba(255,255,255,.07);
+    background:#ffffff;
+    border:1px solid #e2e8f0;
     border-radius:16px; margin-bottom:.8rem;
     overflow-x:auto;
+    box-shadow:0 2px 8px rgba(79,70,229,.07);
 }
 .pipeline-inner {
     display:flex; align-items:center; justify-content:center;
@@ -432,38 +441,38 @@ hr { border:none !important; border-top:1px solid rgba(255,255,255,.06) !importa
     font-family:'Inter',sans-serif; letter-spacing:.03em;
     white-space:nowrap; transition:color .3s;
 }
-.p-sub { font-size:8px; color:#fbbf24; margin-top:2px; }
+.p-sub { font-size:8px; color:#d97706; margin-top:2px; }
 .p-line {
-    flex:1; height:2px; background:rgba(255,255,255,.07);
+    flex:1; height:2px; background:#e9ecf5;
     margin:0 3px; margin-bottom:22px; border-radius:2px;
     transition:background .5s ease; min-width:8px;
 }
-.p-line.filled { background:linear-gradient(90deg,#6366f1,#8b5cf6); }
+.p-line.filled { background:linear-gradient(90deg,#4f46e5,#7c3aed); }
 
 /* Pending */
 .p-step.pending .p-dot {
-    background:rgba(255,255,255,.05); color:#334155;
-    border:1.5px solid rgba(255,255,255,.08);
+    background:#f1f5f9; color:#94a3b8;
+    border:1.5px solid #e2e8f0;
 }
-.p-step.pending .p-name { color:#334155; }
+.p-step.pending .p-name { color:#94a3b8; }
 
 /* Done */
 .p-step.done .p-dot {
     background:linear-gradient(135deg,#059669,#10b981);
     color:#fff; border:none;
-    box-shadow:0 0 14px rgba(16,185,129,.45);
+    box-shadow:0 0 12px rgba(16,185,129,.35);
 }
-.p-step.done .p-name { color:#34d399; font-weight:600; }
+.p-step.done .p-name { color:#059669; font-weight:600; }
 
 /* Active */
 .p-step.active .p-dot {
     background:linear-gradient(135deg,#d97706,#f59e0b);
-    color:#0c0c1d; border:none;
+    color:#fff; border:none;
     animation:dot-pulse 1.2s ease-in-out infinite;
 }
-.p-step.active .p-name { color:#fbbf24; font-weight:700; }
+.p-step.active .p-name { color:#d97706; font-weight:700; }
 @keyframes dot-pulse {
-    0%,100% { box-shadow:0 0 0 0 rgba(245,158,11,.7); transform:scale(1); }
+    0%,100% { box-shadow:0 0 0 0 rgba(245,158,11,.6); transform:scale(1); }
     50%      { box-shadow:0 0 0 9px rgba(245,158,11,0); transform:scale(1.13); }
 }
 
@@ -477,18 +486,19 @@ hr { border:none !important; border-top:1px solid rgba(255,255,255,.06) !importa
 }
 .stat-card {
     flex:1; min-width:80px;
-    background:rgba(255,255,255,.03);
-    border:1px solid rgba(255,255,255,.07);
+    background:#ffffff;
+    border:1px solid #e9ecf5;
     border-radius:10px; padding:10px 12px; text-align:center;
+    box-shadow:0 1px 4px rgba(0,0,0,.05);
     animation:fadeUp .35s ease forwards;
 }
 .stat-val {
-    font-size:1.5rem; font-weight:800; color:#818cf8;
+    font-size:1.5rem; font-weight:800; color:#4f46e5;
     line-height:1; margin-bottom:3px;
     font-family:'Inter',sans-serif;
 }
 .stat-lbl {
-    font-size:.68rem; color:#475569; font-weight:600;
+    font-size:.68rem; color:#94a3b8; font-weight:600;
     letter-spacing:.06em; text-transform:uppercase;
 }
 
@@ -849,9 +859,9 @@ if out:
 else:
     with tab_preview:
         st.markdown("""
-<div style="text-align:center;padding:4rem 2rem;opacity:.4">
+<div style="text-align:center;padding:4rem 2rem;">
     <div style="font-size:3rem;margin-bottom:1rem">✍️</div>
-    <div style="font-size:1.1rem;color:#64748b;font-weight:500">
-        Enter a topic in the sidebar and click <strong>Generate Blog</strong> to get started.
+    <div style="font-size:1.1rem;color:#94a3b8;font-weight:500">
+        Enter a topic in the sidebar and click <strong style="color:#4f46e5">Generate Blog</strong> to get started.
     </div>
 </div>""", unsafe_allow_html=True)
