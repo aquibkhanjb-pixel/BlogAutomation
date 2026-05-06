@@ -207,19 +207,19 @@ with st.sidebar:
             help="Enables live web research for blog topics.",
         )
         AVAILABLE_MODELS = [
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-lite",
-            "gemini-1.5-flash",
-            "gemini-1.5-flash-8b",
-            "gemini-1.5-pro",
+            "gemini-1.5-flash",        # free tier – 1500 req/day
+            "gemini-1.5-flash-8b",     # free tier – highest quota
+            "gemini-2.0-flash-lite",   # free tier – lightweight 2.0
+            "gemini-2.0-flash",        # free tier – may hit daily cap
+            "gemini-1.5-pro",          # free tier – limited quota
         ]
-        current_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        current_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
         model_idx = AVAILABLE_MODELS.index(current_model) if current_model in AVAILABLE_MODELS else 0
         model_choice = st.selectbox(
             "Gemini Model",
             AVAILABLE_MODELS,
             index=model_idx,
-            help="Switch models if you hit a quota limit. gemini-2.0-flash-lite and gemini-1.5-flash have separate free-tier quotas.",
+            help="All models above are on the free tier. gemini-1.5-flash has the most generous quota for multi-step pipelines.",
         )
         if st.button("💾 Save Keys"):
             if google_key_input.strip():
