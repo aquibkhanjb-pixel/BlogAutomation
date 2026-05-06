@@ -64,11 +64,8 @@ def try_stream(graph_app, inputs: Dict[str, Any]) -> Iterator[Tuple[str, Any]]:
         if last_state is not None:
             yield ("final", last_state)
         return
-    except Exception:
-        pass
-
-    out = graph_app.invoke(inputs)
-    yield ("final", out)
+    except Exception as e:
+        raise e
 
 
 def extract_latest_state(current_state: Dict[str, Any], step_payload: Any) -> Dict[str, Any]:
@@ -304,6 +301,10 @@ def log(msg: str):
 if run_btn:
     if not topic.strip():
         st.warning("Please enter a topic.")
+        st.stop()
+
+    if not os.getenv("GOOGLE_API_KEY"):
+        st.error("Google API Key is not set. Enter it in the sidebar and click 💾 Save Keys.")
         st.stop()
 
     inputs: Dict[str, Any] = {
