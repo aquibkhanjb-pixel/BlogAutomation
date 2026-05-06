@@ -98,7 +98,7 @@ class State(TypedDict):
     recency_days: int
 
     # workers
-    sections: Annotated[List[tuple[int, str]], operator.add]  # (task_id, section_md)
+    sections: Annotated[list[tuple[int, str]], operator.add]
 
     # reducer/image
     merged_md: str
