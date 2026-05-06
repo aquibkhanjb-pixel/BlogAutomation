@@ -329,35 +329,43 @@ if run_btn:
     current_state: Dict[str, Any] = {}
     last_node = None
 
-    for kind, payload in try_stream(app, inputs):
-        if kind in ("updates", "values"):
-            node_name = None
-            if isinstance(payload, dict) and len(payload) == 1 and isinstance(next(iter(payload.values())), dict):
-                node_name = next(iter(payload.keys()))
-            if node_name and node_name != last_node:
-                status.write(f"➡️ Node: `{node_name}`")
-                last_node = node_name
+    try:
+        for kind, payload in try_stream(app, inputs):
+            if kind in ("updates", "values"):
+                node_name = None
+                if isinstance(payload, dict) and len(payload) == 1 and isinstance(next(iter(payload.values())), dict):
+                    node_name = next(iter(payload.keys()))
+                if node_name and node_name != last_node:
+                    status.write(f"➡️ Node: `{node_name}`")
+                    last_node = node_name
 
-            current_state = extract_latest_state(current_state, payload)
+                current_state = extract_latest_state(current_state, payload)
 
-            summary = {
-                "mode": current_state.get("mode"),
-                "needs_research": current_state.get("needs_research"),
-                "queries": current_state.get("queries", [])[:5] if isinstance(current_state.get("queries"), list) else [],
-                "evidence_count": len(current_state.get("evidence", []) or []),
-                "tasks": len((current_state.get("plan") or {}).get("tasks", [])) if isinstance(current_state.get("plan"), dict) else None,
-                "images": len(current_state.get("image_specs", []) or []),
-                "sections_done": len(current_state.get("sections", []) or []),
-            }
-            progress_area.json(summary)
+                summary = {
+                    "mode": current_state.get("mode"),
+                    "needs_research": current_state.get("needs_research"),
+                    "queries": current_state.get("queries", [])[:5] if isinstance(current_state.get("queries"), list) else [],
+                    "evidence_count": len(current_state.get("evidence", []) or []),
+                    "tasks": len((current_state.get("plan") or {}).get("tasks", [])) if isinstance(current_state.get("plan"), dict) else None,
+                    "images": len(current_state.get("image_specs", []) or []),
+                    "sections_done": len(current_state.get("sections", []) or []),
+                }
+                progress_area.json(summary)
 
-            log(f"[{kind}] {json.dumps(payload, default=str)[:1200]}")
+                log(f"[{kind}] {json.dumps(payload, default=str)[:1200]}")
 
-        elif kind == "final":
-            out = payload
-            st.session_state["last_out"] = out
-            status.update(label="✅ Done", state="complete", expanded=False)
-            log("[final] received final state")
+            elif kind == "final":
+                out = payload
+                st.session_state["last_out"] = out
+                status.update(label="✅ Done", state="complete", expanded=False)
+                log("[final] received final state")
+
+    except Exception as _err:
+        cause = _err.__cause__ or _err
+        st.error(f"**Graph error** `{type(_err).__name__}`: {_err}")
+        if cause is not _err:
+            st.error(f"**Underlying cause** `{type(cause).__name__}`: {cause}")
+        st.stop()
 
 # Render last result (if any)
 out = st.session_state.get("last_out")
