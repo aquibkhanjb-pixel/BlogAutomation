@@ -7,7 +7,7 @@ import zipfile
 from datetime import date
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Optional, List, Iterator, Tuple
+from typing import Any, Iterator
 
 import pandas as pd
 import streamlit as st
@@ -40,7 +40,7 @@ def bundle_zip(md_text: str, md_filename: str, images_dir: Path) -> bytes:
     return buf.getvalue()
 
 
-def images_zip(images_dir: Path) -> Optional[bytes]:
+def images_zip(images_dir: Path) -> bytes | None:
     if not images_dir.exists() or not images_dir.is_dir():
         return None
     buf = BytesIO()
@@ -51,7 +51,7 @@ def images_zip(images_dir: Path) -> Optional[bytes]:
     return buf.getvalue()
 
 
-def try_stream(graph_app, inputs: Dict[str, Any]) -> Iterator[Tuple[str, Any]]:
+def try_stream(graph_app, inputs: dict[str, Any]) -> Iterator[tuple[str, Any]]:
     """
     Stream graph progress, then yield the final state once.
     Uses values mode so the last emitted state IS the final state — no double invoke.
@@ -68,7 +68,7 @@ def try_stream(graph_app, inputs: Dict[str, Any]) -> Iterator[Tuple[str, Any]]:
         raise e
 
 
-def extract_latest_state(current_state: Dict[str, Any], step_payload: Any) -> Dict[str, Any]:
+def extract_latest_state(current_state: dict[str, Any], step_payload: Any) -> dict[str, Any]:
     if isinstance(step_payload, dict):
         if len(step_payload) == 1 and isinstance(next(iter(step_payload.values())), dict):
             inner = next(iter(step_payload.values()))
@@ -96,7 +96,7 @@ def render_markdown_with_local_images(md: str):
         st.markdown(md, unsafe_allow_html=False)
         return
 
-    parts: List[Tuple[str, str]] = []
+    parts: list[tuple[str, str]] = []
     last = 0
     for m in matches:
         before = md[last : m.start()]
@@ -149,7 +149,7 @@ def render_markdown_with_local_images(md: str):
 # -----------------------------
 # ✅ NEW: Past blogs helpers
 # -----------------------------
-def list_past_blogs() -> List[Path]:
+def list_past_blogs() -> list[Path]:
     """
     Returns .md files in current working directory, newest first.
     Filters out obvious non-blog markdown files if needed.
@@ -257,8 +257,8 @@ with st.sidebar:
         selected_md_file = None
     else:
         # Build labels from file name + (optional) parsed title
-        options: List[str] = []
-        file_by_label: Dict[str, Path] = {}
+        options: list[str] = []
+        file_by_label: dict[str, Path] = {}
         for p in past_files[:50]:
             try:
                 md_text = read_md_file(p)
@@ -306,7 +306,7 @@ tab_plan, tab_evidence, tab_preview, tab_images, tab_logs = st.tabs(
     ["🧩 Plan", "🔎 Evidence", "📝 Markdown Preview", "🖼️ Images", "🧾 Logs"]
 )
 
-logs: List[str] = []
+logs: list[str] = []
 
 
 def log(msg: str):
@@ -322,7 +322,7 @@ if run_btn:
         st.error("Google API Key is not set. Enter it in the sidebar and click 💾 Save Keys.")
         st.stop()
 
-    inputs: Dict[str, Any] = {
+    inputs: dict[str, Any] = {
         "topic": topic.strip(),
         "mode": "",
         "needs_research": False,
@@ -341,7 +341,7 @@ if run_btn:
     status = st.status("Running graph…", expanded=True)
     progress_area = st.empty()
 
-    current_state: Dict[str, Any] = {}
+    current_state: dict[str, Any] = {}
     last_node = None
 
     try:

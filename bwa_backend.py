@@ -5,7 +5,7 @@ import os
 import re
 from datetime import date, timedelta
 from pathlib import Path
-from typing import TypedDict, List, Optional, Literal, Annotated
+from typing import TypedDict, Literal, Annotated
 
 from pydantic import BaseModel, Field
 
@@ -32,10 +32,10 @@ class Task(BaseModel):
     id: int
     title: str
     goal: str = Field(..., description="One sentence describing what the reader should do/understand.")
-    bullets: List[str] = Field(..., min_length=3, max_length=6)
+    bullets: list[str] = Field(..., min_length=3, max_length=6)
     target_words: int = Field(..., description="Target words (120–550).")
 
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     requires_research: bool = False
     requires_citations: bool = False
     requires_code: bool = False
@@ -46,28 +46,28 @@ class Plan(BaseModel):
     audience: str
     tone: str
     blog_kind: Literal["explainer", "tutorial", "news_roundup", "comparison", "system_design"] = "explainer"
-    constraints: List[str] = Field(default_factory=list)
-    tasks: List[Task]
+    constraints: list[str] = Field(default_factory=list)
+    tasks: list[Task]
 
 
 class EvidenceItem(BaseModel):
     title: str
     url: str
-    published_at: Optional[str] = None  # ISO "YYYY-MM-DD" preferred
-    snippet: Optional[str] = None
-    source: Optional[str] = None
+    published_at: str | None = None  # ISO "YYYY-MM-DD" preferred
+    snippet: str | None = None
+    source: str | None = None
 
 
 class RouterDecision(BaseModel):
     needs_research: bool
     mode: Literal["closed_book", "hybrid", "open_book"]
     reason: str
-    queries: List[str] = Field(default_factory=list)
+    queries: list[str] = Field(default_factory=list)
     max_results_per_query: int = Field(5)
 
 
 class EvidencePack(BaseModel):
-    evidence: List[EvidenceItem] = Field(default_factory=list)
+    evidence: list[EvidenceItem] = Field(default_factory=list)
 
 
 # ---- Image planning schema (ported from your image flow) ----
@@ -83,7 +83,7 @@ class ImageSpec(BaseModel):
 
 class GlobalImagePlan(BaseModel):
     md_with_placeholders: str
-    images: List[ImageSpec] = Field(default_factory=list)
+    images: list[ImageSpec] = Field(default_factory=list)
 
 class State(TypedDict):
     topic: str
@@ -91,9 +91,9 @@ class State(TypedDict):
     # routing / research
     mode: str
     needs_research: bool
-    queries: List[str]
-    evidence: List[EvidenceItem]
-    plan: Optional[Plan]
+    queries: list[str]
+    evidence: list[EvidenceItem]
+    plan: Plan | None
 
     # recency
     as_of: str
@@ -105,7 +105,7 @@ class State(TypedDict):
     # reducer/image
     merged_md: str
     md_with_placeholders: str
-    image_specs: List[dict]
+    image_specs: list[dict]
 
     final: str
 
@@ -172,14 +172,14 @@ def route_next(state: State) -> str:
 # -----------------------------
 # 4) Research (Tavily)
 # -----------------------------
-def _tavily_search(query: str, max_results: int = 5) -> List[dict]:
+def _tavily_search(query: str, max_results: int = 5) -> list[dict]:
     if not os.getenv("TAVILY_API_KEY"):
         return []
     try:
         from langchain_community.tools.tavily_search import TavilySearchResults  # type: ignore
         tool = TavilySearchResults(max_results=max_results)
         results = tool.invoke({"query": query})
-        out: List[dict] = []
+        out: list[dict] = []
         for r in results or []:
             out.append(
                 {
@@ -194,7 +194,7 @@ def _tavily_search(query: str, max_results: int = 5) -> List[dict]:
     except Exception:
         return []
 
-def _iso_to_date(s: Optional[str]) -> Optional[date]:
+def _iso_to_date(s: str | None) -> date | None:
     if not s:
         return None
     try:
@@ -216,7 +216,7 @@ Rules:
 
 def research_node(state: State) -> dict:
     queries = (state.get("queries") or [])[:10]
-    raw: List[dict] = []
+    raw: list[dict] = []
     for q in queries:
         raw.extend(_tavily_search(q, max_results=6))
 
