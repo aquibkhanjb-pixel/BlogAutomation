@@ -12,15 +12,13 @@ from typing import Any, Iterator
 import pandas as pd
 import streamlit as st
 
-# -----------------------------
-# Import your compiled LangGraph app
-# -----------------------------
 from bwa_backend import app
 
 
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # Helpers
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+
 def safe_slug(title: str) -> str:
     s = title.strip().lower()
     s = re.sub(r"[^a-z0-9 _-]+", "", s)
@@ -32,7 +30,6 @@ def bundle_zip(md_text: str, md_filename: str, images_dir: Path) -> bytes:
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
         z.writestr(md_filename, md_text.encode("utf-8"))
-
         if images_dir.exists() and images_dir.is_dir():
             for p in images_dir.rglob("*"):
                 if p.is_file():
@@ -52,10 +49,6 @@ def images_zip(images_dir: Path) -> bytes | None:
 
 
 def try_stream(graph_app, inputs: dict[str, Any]) -> Iterator[tuple[str, Any]]:
-    """
-    Stream graph progress, then yield the final state once.
-    Uses values mode so the last emitted state IS the final state — no double invoke.
-    """
     last_state = None
     try:
         for step in graph_app.stream(inputs, stream_mode="values"):
@@ -78,16 +71,16 @@ def extract_latest_state(current_state: dict[str, Any], step_payload: Any) -> di
     return current_state
 
 
-# -----------------------------
-# Markdown renderer that supports local images
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Local image renderer
+# ─────────────────────────────────────────────────────────────────────────────
+
 _MD_IMG_RE = re.compile(r"!\[(?P<alt>[^\]]*)\]\((?P<src>[^)]+)\)")
 _CAPTION_LINE_RE = re.compile(r"^\*(?P<cap>.+)\*$")
 
 
 def _resolve_image_path(src: str) -> Path:
-    src = src.strip().lstrip("./")
-    return Path(src).resolve()
+    return Path(src.strip().lstrip("./")).resolve()
 
 
 def render_markdown_with_local_images(md: str):
@@ -102,12 +95,8 @@ def render_markdown_with_local_images(md: str):
         before = md[last : m.start()]
         if before:
             parts.append(("md", before))
-
-        alt = (m.group("alt") or "").strip()
-        src = (m.group("src") or "").strip()
-        parts.append(("img", f"{alt}|||{src}"))
+        parts.append(("img", f"{(m.group('alt') or '').strip()}|||{(m.group('src') or '').strip()}"))
         last = m.end()
-
     tail = md[last:]
     if tail:
         parts.append(("md", tail))
@@ -115,14 +104,11 @@ def render_markdown_with_local_images(md: str):
     i = 0
     while i < len(parts):
         kind, payload = parts[i]
-
         if kind == "md":
             st.markdown(payload, unsafe_allow_html=False)
             i += 1
             continue
-
         alt, src = payload.split("|||", 1)
-
         caption = None
         if i + 1 < len(parts) and parts[i + 1][0] == "md":
             nxt = parts[i + 1][1].lstrip()
@@ -131,31 +117,24 @@ def render_markdown_with_local_images(md: str):
                 mcap = _CAPTION_LINE_RE.match(first_line)
                 if mcap:
                     caption = mcap.group("cap").strip()
-                    rest = "\n".join(nxt.splitlines()[1:])
-                    parts[i + 1] = ("md", rest)
-
+                    parts[i + 1] = ("md", "\n".join(nxt.splitlines()[1:]))
         if src.startswith("http://") or src.startswith("https://"):
-            st.image(src, caption=caption or (alt or None), use_container_width=True)
+            st.image(src, caption=caption or alt or None, use_container_width=True)
         else:
             img_path = _resolve_image_path(src)
             if img_path.exists():
-                st.image(str(img_path), caption=caption or (alt or None), use_container_width=True)
+                st.image(str(img_path), caption=caption or alt or None, use_container_width=True)
             else:
-                st.warning(f"Image not found: `{src}` (looked for `{img_path}`)")
-
+                st.warning(f"Image not found: `{src}`")
         i += 1
 
 
-# -----------------------------
-# ✅ NEW: Past blogs helpers
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Past-blog helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
 def list_past_blogs() -> list[Path]:
-    """
-    Returns .md files in current working directory, newest first.
-    Filters out obvious non-blog markdown files if needed.
-    """
-    cwd = Path(".")
-    files = [p for p in cwd.glob("*.md") if p.is_file()]
+    files = [p for p in Path(".").glob("*.md") if p.is_file()]
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return files
 
@@ -165,65 +144,426 @@ def read_md_file(p: Path) -> str:
 
 
 def extract_title_from_md(md: str, fallback: str) -> str:
-    """
-    Use first '# ' heading as title if present.
-    """
     for line in md.splitlines():
         if line.startswith("# "):
-            t = line[2:].strip()
-            return t or fallback
+            return line[2:].strip() or fallback
     return fallback
 
 
-# -----------------------------
-# Streamlit UI
-# -----------------------------
-st.set_page_config(page_title="LangGraph Blog Writer", layout="wide")
+# ─────────────────────────────────────────────────────────────────────────────
+# Pipeline animation
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Restore API keys and model from session state into os.environ on each rerun
+PIPELINE_STAGES = [
+    ("router",                    "Route",   "1"),
+    ("research",                  "Research","2"),
+    ("orchestrator",              "Plan",    "3"),
+    ("worker",                    "Write",   "4"),
+    ("merge_content",             "Merge",   "5"),
+    ("decide_images",             "Images",  "6"),
+    ("generate_and_place_images", "Finish",  "7"),
+]
+
+
+def _infer_node(cur: dict[str, Any], prev: dict[str, Any]) -> str | None:
+    if cur.get("final") and not prev.get("final"):
+        return "generate_and_place_images"
+    if cur.get("md_with_placeholders") and not prev.get("md_with_placeholders"):
+        return "decide_images"
+    if cur.get("merged_md") and not prev.get("merged_md"):
+        return "merge_content"
+    if len(cur.get("sections") or []) > len(prev.get("sections") or []):
+        return "worker"
+    if cur.get("plan") and not prev.get("plan"):
+        return "orchestrator"
+    if (cur.get("evidence") or []) and not (prev.get("evidence") or []):
+        return "research"
+    if cur.get("mode") and not prev.get("mode"):
+        return "router"
+    return None
+
+
+def _pipeline_html(completed: list[str], active: str | None,
+                   worker_info: tuple[int, int] | None = None) -> str:
+    items = ""
+    for i, (key, label, num) in enumerate(PIPELINE_STAGES):
+        if key == "worker" and worker_info:
+            done, total = worker_info
+            extra = f"<div class='p-sub'>{done}/{total}</div>"
+        else:
+            extra = ""
+
+        if key in completed:
+            cls, badge = "done", "✓"
+        elif key == active:
+            cls = "active"
+            badge = f"<span class='dot-spin'>{num}</span>"
+        else:
+            cls, badge = "pending", num
+
+        fill = "filled" if key in completed else ""
+        connector = f'<div class="p-line {fill}"></div>' if i < len(PIPELINE_STAGES) - 1 else ""
+
+        items += f"""
+        <div class="p-step {cls}">
+            <div class="p-dot">{badge}</div>
+            <div class="p-name">{label}{extra}</div>
+        </div>{connector}"""
+
+    return f"""
+    <div class="pipeline-shell">
+        <div class="pipeline-inner">{items}</div>
+    </div>"""
+
+
+def _stats_html(state: dict[str, Any]) -> str:
+    mode = state.get("mode") or ""
+    evidence_n = len(state.get("evidence") or [])
+    sections_n = len(state.get("sections") or [])
+    plan = state.get("plan")
+    tasks_n: int | str = "—"
+    if isinstance(plan, dict):
+        tasks_n = len(plan.get("tasks") or [])
+    elif hasattr(plan, "tasks"):
+        tasks_n = len(plan.tasks or [])
+
+    mode_color = {
+        "open_book": "#f472b6",
+        "hybrid":    "#fb923c",
+        "closed_book": "#4ade80",
+    }.get(mode, "#818cf8")
+    mode_label = mode.replace("_", " ").title() or "—"
+
+    return f"""
+    <div class="stat-row">
+        <div class="stat-card">
+            <div class="stat-val" style="color:{mode_color};font-size:0.85rem;padding-top:6px">{mode_label}</div>
+            <div class="stat-lbl">Mode</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val">{evidence_n}</div>
+            <div class="stat-lbl">Evidence</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val">{tasks_n}</div>
+            <div class="stat-lbl">Planned</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val">{sections_n}</div>
+            <div class="stat-lbl">Written</div>
+        </div>
+    </div>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Global CSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+GLOBAL_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* ── Page background ── */
+.stApp {
+    background: linear-gradient(160deg, #060610 0%, #0c0c1d 45%, #111122 100%);
+}
+
+/* ── Hero ── */
+.hero { text-align:center; padding:2.2rem 1rem 1.2rem; }
+.hero-title {
+    font-size: 2.6rem; font-weight: 800; margin:0 0 .4rem;
+    background: linear-gradient(135deg, #818cf8 0%, #a78bfa 45%, #f472b6 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    letter-spacing: -0.04em; line-height:1.1;
+}
+.hero-sub { color:#475569; font-size:.95rem; font-weight:400; margin:0; }
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg,#08081a 0%,#0b0b1c 100%) !important;
+    border-right: 1px solid rgba(129,140,248,.1) !important;
+}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 { color:#c7d2fe !important; }
+
+/* ── Primary button ── */
+.stButton > button[kind="primary"],
+.stButton > button[data-testid*="primary"] {
+    width:100%; background:linear-gradient(135deg,#6366f1,#8b5cf6) !important;
+    border:none !important; border-radius:10px !important; font-weight:700 !important;
+    font-size:.9rem !important; letter-spacing:.02em !important;
+    box-shadow:0 4px 22px rgba(99,102,241,.4) !important;
+    transition:all .25s cubic-bezier(.4,0,.2,1) !important; color:#fff !important;
+}
+.stButton > button[kind="primary"]:hover {
+    transform:translateY(-2px) !important;
+    box-shadow:0 8px 30px rgba(99,102,241,.6) !important;
+}
+.stButton > button[kind="primary"]:active { transform:translateY(0) !important; }
+
+/* ── Secondary buttons ── */
+.stButton > button:not([kind="primary"]) {
+    background:rgba(255,255,255,.05) !important;
+    border:1px solid rgba(255,255,255,.1) !important;
+    border-radius:8px !important; color:#94a3b8 !important;
+    font-weight:500 !important; transition:all .2s ease !important;
+}
+.stButton > button:not([kind="primary"]):hover {
+    background:rgba(255,255,255,.09) !important;
+    border-color:rgba(129,140,248,.4) !important; color:#c7d2fe !important;
+}
+
+/* ── Download buttons ── */
+.stDownloadButton > button {
+    border-radius:8px !important;
+    background:rgba(16,185,129,.1) !important;
+    border:1px solid rgba(16,185,129,.3) !important;
+    color:#6ee7b7 !important; font-weight:500 !important;
+    transition:all .2s ease !important;
+}
+.stDownloadButton > button:hover {
+    background:rgba(16,185,129,.18) !important;
+    border-color:rgba(16,185,129,.5) !important;
+}
+
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] {
+    background:rgba(255,255,255,.03) !important; border-radius:12px !important;
+    padding:4px !important; border:1px solid rgba(255,255,255,.06) !important; gap:2px !important;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius:8px !important; font-weight:500 !important; font-size:.88rem !important;
+    color:#64748b !important; padding:.4rem .8rem !important; transition:all .2s ease !important;
+}
+.stTabs [aria-selected="true"] {
+    background:rgba(99,102,241,.18) !important;
+    color:#a5b4fc !important; font-weight:600 !important;
+}
+
+/* ── Inputs ── */
+.stTextInput input, .stTextArea textarea {
+    background:rgba(255,255,255,.04) !important;
+    border:1px solid rgba(255,255,255,.1) !important;
+    border-radius:8px !important; color:#e2e8f0 !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+    border-color:rgba(99,102,241,.5) !important;
+    box-shadow:0 0 0 3px rgba(99,102,241,.15) !important;
+    outline:none !important;
+}
+
+/* ── Selectbox ── */
+[data-testid="stSelectbox"] > div > div {
+    background:rgba(255,255,255,.04) !important;
+    border:1px solid rgba(255,255,255,.1) !important;
+    border-radius:8px !important;
+}
+
+/* ── Metrics ── */
+[data-testid="stMetric"] {
+    background:rgba(255,255,255,.03) !important;
+    border:1px solid rgba(255,255,255,.07) !important;
+    border-radius:12px !important; padding:1rem 1.2rem !important;
+}
+[data-testid="stMetricValue"] { font-weight:700 !important; color:#a5b4fc !important; }
+[data-testid="stMetricLabel"] { color:#64748b !important; font-size:.8rem !important; }
+
+/* ── DataFrame ── */
+[data-testid="stDataFrame"] {
+    border-radius:12px !important; overflow:hidden !important;
+    border:1px solid rgba(255,255,255,.07) !important;
+}
+
+/* ── Status ── */
+[data-testid="stStatus"] {
+    border-radius:12px !important; background:rgba(255,255,255,.02) !important;
+    border:1px solid rgba(255,255,255,.07) !important;
+}
+
+/* ── Expander ── */
+[data-testid="stExpander"] {
+    border:1px solid rgba(255,255,255,.07) !important;
+    border-radius:12px !important; background:rgba(255,255,255,.02) !important;
+}
+
+/* ── Alerts ── */
+[data-testid="stAlert"] { border-radius:10px !important; }
+
+/* ── HR ── */
+hr { border:none !important; border-top:1px solid rgba(255,255,255,.06) !important; margin:1.2rem 0 !important; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(99,102,241,.3); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:rgba(99,102,241,.5); }
+
+/* ─────────────────────────────────────────────────────────── */
+/*  PIPELINE ANIMATION                                         */
+/* ─────────────────────────────────────────────────────────── */
+.pipeline-shell {
+    padding:1.2rem 1rem;
+    background:rgba(255,255,255,.025);
+    border:1px solid rgba(255,255,255,.07);
+    border-radius:16px; margin-bottom:.8rem;
+    overflow-x:auto;
+}
+.pipeline-inner {
+    display:flex; align-items:center; justify-content:center;
+    flex-wrap:nowrap; min-width:500px; gap:0;
+}
+.p-step {
+    display:flex; flex-direction:column; align-items:center;
+    gap:5px; min-width:72px; flex-shrink:0;
+}
+.p-dot {
+    width:38px; height:38px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700;
+    transition:all .4s cubic-bezier(.4,0,.2,1);
+}
+.p-name {
+    font-size:10px; font-weight:500; text-align:center;
+    font-family:'Inter',sans-serif; letter-spacing:.03em;
+    white-space:nowrap; transition:color .3s;
+}
+.p-sub { font-size:8px; color:#fbbf24; margin-top:2px; }
+.p-line {
+    flex:1; height:2px; background:rgba(255,255,255,.07);
+    margin:0 3px; margin-bottom:22px; border-radius:2px;
+    transition:background .5s ease; min-width:8px;
+}
+.p-line.filled { background:linear-gradient(90deg,#6366f1,#8b5cf6); }
+
+/* Pending */
+.p-step.pending .p-dot {
+    background:rgba(255,255,255,.05); color:#334155;
+    border:1.5px solid rgba(255,255,255,.08);
+}
+.p-step.pending .p-name { color:#334155; }
+
+/* Done */
+.p-step.done .p-dot {
+    background:linear-gradient(135deg,#059669,#10b981);
+    color:#fff; border:none;
+    box-shadow:0 0 14px rgba(16,185,129,.45);
+}
+.p-step.done .p-name { color:#34d399; font-weight:600; }
+
+/* Active */
+.p-step.active .p-dot {
+    background:linear-gradient(135deg,#d97706,#f59e0b);
+    color:#0c0c1d; border:none;
+    animation:dot-pulse 1.2s ease-in-out infinite;
+}
+.p-step.active .p-name { color:#fbbf24; font-weight:700; }
+@keyframes dot-pulse {
+    0%,100% { box-shadow:0 0 0 0 rgba(245,158,11,.7); transform:scale(1); }
+    50%      { box-shadow:0 0 0 9px rgba(245,158,11,0); transform:scale(1.13); }
+}
+
+/* Spinning number inside active badge */
+.dot-spin { display:inline-block; animation:num-spin 1.4s linear infinite; }
+@keyframes num-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+/* ── Live-stats row ── */
+.stat-row {
+    display:flex; gap:10px; margin:.6rem 0 1rem; flex-wrap:wrap;
+}
+.stat-card {
+    flex:1; min-width:80px;
+    background:rgba(255,255,255,.03);
+    border:1px solid rgba(255,255,255,.07);
+    border-radius:10px; padding:10px 12px; text-align:center;
+    animation:fadeUp .35s ease forwards;
+}
+.stat-val {
+    font-size:1.5rem; font-weight:800; color:#818cf8;
+    line-height:1; margin-bottom:3px;
+    font-family:'Inter',sans-serif;
+}
+.stat-lbl {
+    font-size:.68rem; color:#475569; font-weight:600;
+    letter-spacing:.06em; text-transform:uppercase;
+}
+
+/* ── Fade-up ── */
+@keyframes fadeUp {
+    from { opacity:0; transform:translateY(10px); }
+    to   { opacity:1; transform:translateY(0); }
+}
+.fade-up { animation:fadeUp .45s ease forwards; }
+</style>
+"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# App entry point
+# ─────────────────────────────────────────────────────────────────────────────
+
+st.set_page_config(
+    page_title="BlogForge AI",
+    page_icon="✍️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+
+# Hero header
+st.markdown("""
+<div class="hero">
+    <div class="hero-title">BlogForge AI</div>
+    <p class="hero-sub">Intelligent long-form blog generation · Powered by LangGraph + Gemini</p>
+</div>
+""", unsafe_allow_html=True)
+
+# Restore env keys from session state on each rerun
 for _env_key in ("GOOGLE_API_KEY", "TAVILY_API_KEY", "GEMINI_MODEL"):
     _stored = st.session_state.get(f"_env_{_env_key}", "")
     if _stored and not os.getenv(_env_key):
         os.environ[_env_key] = _stored
 
-st.title("Blog Writing Agent")
+# ── Sidebar ────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    # ── API Keys ──────────────────────────────────────────────
+    st.markdown("### ⚙️ Configuration")
     google_key_missing = not os.getenv("GOOGLE_API_KEY")
+
     with st.expander("🔑 API Keys", expanded=google_key_missing):
         google_key_input = st.text_input(
             "Google API Key",
             value=st.session_state.get("_env_GOOGLE_API_KEY", os.getenv("GOOGLE_API_KEY", "")),
-            type="password",
-            placeholder="AIza...",
-            help="Required for both the LLM and image generation. Get one free at https://aistudio.google.com/apikey",
+            type="password", placeholder="AIza...",
+            help="Required. Get one free at https://aistudio.google.com/apikey",
         )
         tavily_key_input = st.text_input(
             "Tavily API Key (optional)",
             value=st.session_state.get("_env_TAVILY_API_KEY", os.getenv("TAVILY_API_KEY", "")),
-            type="password",
-            placeholder="tvly-...",
-            help="Enables live web research for blog topics.",
+            type="password", placeholder="tvly-...",
+            help="Enables live web research.",
         )
         AVAILABLE_MODELS = [
-            "gemini-2.5-flash",       # free tier – best balance (recommended)
-            "gemini-2.5-flash-lite",  # free tier – fastest, most budget-friendly
-            "gemini-2.5-pro",         # free tier – limited quota, most capable
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-pro",
         ]
         current_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         model_idx = AVAILABLE_MODELS.index(current_model) if current_model in AVAILABLE_MODELS else 0
         model_choice = st.selectbox(
-            "Gemini Model",
-            AVAILABLE_MODELS,
-            index=model_idx,
-            help="gemini-2.5-flash is the recommended free-tier model. Switch to flash-lite if you hit quota limits.",
+            "Gemini Model", AVAILABLE_MODELS, index=model_idx,
+            help="gemini-2.5-flash recommended. Switch to flash-lite on quota errors.",
         )
         if st.button("💾 Save Keys"):
             if google_key_input.strip():
                 os.environ["GOOGLE_API_KEY"] = google_key_input.strip()
                 st.session_state["_env_GOOGLE_API_KEY"] = google_key_input.strip()
-                st.success("Google API key saved!")
+                st.success("Keys saved!")
             else:
                 st.warning("Google API Key is required.")
             if tavily_key_input.strip():
@@ -238,25 +578,22 @@ with st.sidebar:
     if google_key_missing:
         st.warning("Add your Google API Key above to get started.")
 
-    st.divider()
-    st.header("Generate New Blog")
+    st.markdown("---")
+    st.markdown("### ✍️ New Blog")
     topic = st.text_area(
-        "Topic",
-        height=120,
+        "Topic", height=110,
+        placeholder="e.g. How Transformer attention works, or\nWeekly AI news roundup May 2026",
     )
     as_of = st.date_input("As-of date", value=date.today())
-    run_btn = st.button("🚀 Generate Blog", type="primary")
+    run_btn = st.button("🚀 Generate Blog", type="primary", use_container_width=True)
 
-    # ✅ NEW: Past blogs list (keeps everything else intact)
-    st.divider()
-    st.subheader("Past blogs")
-
+    st.markdown("---")
+    st.markdown("### 📂 Past Blogs")
     past_files = list_past_blogs()
     if not past_files:
-        st.caption("No saved blogs found (*.md in current folder).")
+        st.caption("No saved blogs yet.")
         selected_md_file = None
     else:
-        # Build labels from file name + (optional) parsed title
         options: list[str] = []
         file_by_label: dict[str, Path] = {}
         for p in past_files[:50]:
@@ -270,40 +607,29 @@ with st.sidebar:
             file_by_label[label] = p
 
         selected_label = st.radio(
-            "Select a blog to load",
-            options=options,
-            index=0,
-            label_visibility="collapsed",
+            "Select a blog", options=options, index=0, label_visibility="collapsed",
         )
         selected_md_file = file_by_label.get(selected_label)
 
-        if st.button("📂 Load selected blog"):
+        if st.button("📂 Load selected blog", use_container_width=True):
             if selected_md_file:
                 md_text = read_md_file(selected_md_file)
-                # Load into session_state as if it were a run output
                 st.session_state["last_out"] = {
-                    "plan": None,          # old files don't include plan
-                    "evidence": [],        # old files don't include evidence
-                    "image_specs": [],     # optional (not persisted)
-                    "final": md_text,      # markdown body
+                    "plan": None, "evidence": [], "image_specs": [], "final": md_text,
                 }
-                # also update the topic input to the title (best-effort) without changing UI
-                st.session_state["topic_prefill"] = extract_title_from_md(md_text, selected_md_file.stem)
+                st.session_state["topic_prefill"] = extract_title_from_md(
+                    md_text, selected_md_file.stem
+                )
 
-    
+# ── Session defaults ───────────────────────────────────────────────────────
 
-# Keep your topic input as-is; optionally prefill for next run after loading a blog
-if "topic_prefill" in st.session_state and isinstance(st.session_state["topic_prefill"], str):
-    # Do not mutate widgets; just keep as a hint.
-    pass
-
-# Storage for latest run
 if "last_out" not in st.session_state:
     st.session_state["last_out"] = None
 
-# Layout
+# ── Tabs ───────────────────────────────────────────────────────────────────
+
 tab_plan, tab_evidence, tab_preview, tab_images, tab_logs = st.tabs(
-    ["🧩 Plan", "🔎 Evidence", "📝 Markdown Preview", "🖼️ Images", "🧾 Logs"]
+    ["🧩 Plan", "🔎 Evidence", "📝 Preview", "🖼️ Images", "🧾 Logs"]
 )
 
 logs: list[str] = []
@@ -313,66 +639,71 @@ def log(msg: str):
     logs.append(msg)
 
 
+# ── Generation handler ─────────────────────────────────────────────────────
+
 if run_btn:
     if not topic.strip():
         st.warning("Please enter a topic.")
         st.stop()
-
     if not os.getenv("GOOGLE_API_KEY"):
         st.error("Google API Key is not set. Enter it in the sidebar and click 💾 Save Keys.")
         st.stop()
 
     inputs: dict[str, Any] = {
-        "topic": topic.strip(),
-        "mode": "",
-        "needs_research": False,
-        "queries": [],
-        "evidence": [],
-        "plan": None,
-        "as_of": as_of.isoformat(),
-        "recency_days": 7,
-        "sections": [],
-        "merged_md": "",
-        "md_with_placeholders": "",
-        "image_specs": [],
-        "final": "",
+        "topic": topic.strip(), "mode": "", "needs_research": False,
+        "queries": [], "evidence": [], "plan": None, "as_of": as_of.isoformat(),
+        "recency_days": 7, "sections": [], "merged_md": "",
+        "md_with_placeholders": "", "image_specs": [], "final": "",
     }
 
-    status = st.status("Running graph…", expanded=True)
-    progress_area = st.empty()
+    pipeline_ph = st.empty()
+    stats_ph    = st.empty()
+    status      = st.status("Initializing pipeline…", expanded=True)
 
+    pipeline_ph.markdown(_pipeline_html([], None), unsafe_allow_html=True)
+
+    completed_nodes: list[str] = []
+    active_node: str | None    = None
+    prev_state: dict[str, Any] = {}
     current_state: dict[str, Any] = {}
-    last_node = None
 
     try:
         for kind, payload in try_stream(app, inputs):
             if kind in ("updates", "values"):
-                node_name = None
-                if isinstance(payload, dict) and len(payload) == 1 and isinstance(next(iter(payload.values())), dict):
-                    node_name = next(iter(payload.keys()))
-                if node_name and node_name != last_node:
-                    status.write(f"➡️ Node: `{node_name}`")
-                    last_node = node_name
+                current_state = extract_latest_state(dict(current_state), payload)
 
-                current_state = extract_latest_state(current_state, payload)
+                node = _infer_node(current_state, prev_state)
+                if node and node != active_node:
+                    if active_node and active_node not in completed_nodes:
+                        completed_nodes.append(active_node)
+                    active_node = node
+                    label = node.replace("_", " ").title()
+                    status.write(f"**{label}** running…")
 
-                summary = {
-                    "mode": current_state.get("mode"),
-                    "needs_research": current_state.get("needs_research"),
-                    "queries": current_state.get("queries", [])[:5] if isinstance(current_state.get("queries"), list) else [],
-                    "evidence_count": len(current_state.get("evidence", []) or []),
-                    "tasks": len((current_state.get("plan") or {}).get("tasks", [])) if isinstance(current_state.get("plan"), dict) else None,
-                    "images": len(current_state.get("image_specs", []) or []),
-                    "sections_done": len(current_state.get("sections", []) or []),
-                }
-                progress_area.json(summary)
+                sections = current_state.get("sections") or []
+                plan = current_state.get("plan")
+                total_tasks = 0
+                if isinstance(plan, dict):
+                    total_tasks = len(plan.get("tasks") or [])
+                elif hasattr(plan, "tasks"):
+                    total_tasks = len(plan.tasks or [])
+                wp = (len(sections), total_tasks) if active_node == "worker" and total_tasks else None
+
+                pipeline_ph.markdown(
+                    _pipeline_html(completed_nodes, active_node, wp),
+                    unsafe_allow_html=True,
+                )
+                stats_ph.markdown(_stats_html(current_state), unsafe_allow_html=True)
 
                 log(f"[{kind}] {json.dumps(payload, default=str)[:1200]}")
+                prev_state = dict(current_state)
 
             elif kind == "final":
-                out = payload
-                st.session_state["last_out"] = out
-                status.update(label="✅ Done", state="complete", expanded=False)
+                all_keys = [s[0] for s in PIPELINE_STAGES]
+                pipeline_ph.markdown(_pipeline_html(all_keys, None), unsafe_allow_html=True)
+                stats_ph.empty()
+                st.session_state["last_out"] = payload
+                status.update(label="✅ Blog generated successfully!", state="complete", expanded=False)
                 log("[final] received final state")
 
     except Exception as _err:
@@ -382,12 +713,14 @@ if run_btn:
             st.error(f"**Underlying cause** `{type(cause).__name__}`: {cause}")
         st.stop()
 
-# Render last result (if any)
+
+# ── Results ────────────────────────────────────────────────────────────────
+
 out = st.session_state.get("last_out")
+
 if out:
-    # --- Plan tab ---
+    # ── Plan tab ──
     with tab_plan:
-        st.subheader("Plan")
         plan_obj = out.get("plan")
         if not plan_obj:
             st.info("No plan found in output.")
@@ -399,62 +732,57 @@ if out:
             else:
                 plan_dict = json.loads(json.dumps(plan_obj, default=str))
 
-            st.write("**Title:**", plan_dict.get("blog_title"))
-            cols = st.columns(3)
-            cols[0].write("**Audience:** " + str(plan_dict.get("audience")))
-            cols[1].write("**Tone:** " + str(plan_dict.get("tone")))
-            cols[2].write("**Blog kind:** " + str(plan_dict.get("blog_kind", "")))
+            st.markdown(f"### {plan_dict.get('blog_title', 'Blog Plan')}")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Audience", plan_dict.get("audience", "—"))
+            c2.metric("Tone", plan_dict.get("tone", "—"))
+            c3.metric("Kind", plan_dict.get("blog_kind", "—"))
 
             tasks = plan_dict.get("tasks", [])
             if tasks:
-                df = pd.DataFrame(
-                    [
-                        {
-                            "id": t.get("id"),
-                            "title": t.get("title"),
-                            "target_words": t.get("target_words"),
-                            "requires_research": t.get("requires_research"),
-                            "requires_citations": t.get("requires_citations"),
-                            "requires_code": t.get("requires_code"),
-                            "tags": ", ".join(t.get("tags") or []),
-                        }
-                        for t in tasks
-                    ]
-                ).sort_values("id")
+                st.markdown("#### Sections")
+                df = pd.DataFrame([
+                    {
+                        "#": t.get("id"),
+                        "Title": t.get("title"),
+                        "Words": t.get("target_words"),
+                        "Research": "✓" if t.get("requires_research") else "",
+                        "Citations": "✓" if t.get("requires_citations") else "",
+                        "Code": "✓" if t.get("requires_code") else "",
+                        "Tags": ", ".join(t.get("tags") or []),
+                    }
+                    for t in tasks
+                ]).sort_values("#")
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
-                with st.expander("Task details"):
+                with st.expander("Raw task JSON"):
                     st.json(tasks)
 
-    # --- Evidence tab ---
+    # ── Evidence tab ──
     with tab_evidence:
-        st.subheader("Evidence")
         evidence = out.get("evidence") or []
         if not evidence:
-            st.info("No evidence returned (maybe closed_book mode or no Tavily key/results).")
+            st.info("No evidence (closed-book mode or no Tavily key).")
         else:
+            st.markdown(f"**{len(evidence)} sources collected**")
             rows = []
             for e in evidence:
                 if hasattr(e, "model_dump"):
                     e = e.model_dump()
-                rows.append(
-                    {
-                        "title": e.get("title"),
-                        "published_at": e.get("published_at"),
-                        "source": e.get("source"),
-                        "url": e.get("url"),
-                    }
-                )
+                rows.append({
+                    "Title": e.get("title"), "Date": e.get("published_at"),
+                    "Source": e.get("source"), "URL": e.get("url"),
+                })
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    # --- Preview tab ---
+    # ── Preview tab ──
     with tab_preview:
-        st.subheader("Markdown Preview")
         final_md = out.get("final") or ""
         if not final_md:
-            st.warning("No final markdown found.")
+            st.warning("No markdown output yet.")
         else:
             render_markdown_with_local_images(final_md)
+            st.markdown("---")
 
             plan_obj = out.get("plan")
             if hasattr(plan_obj, "blog_title"):
@@ -462,28 +790,25 @@ if out:
             elif isinstance(plan_obj, dict):
                 blog_title = plan_obj.get("blog_title", "blog")
             else:
-                # fallback: parse from markdown title
                 blog_title = extract_title_from_md(final_md, "blog")
 
             md_filename = f"{safe_slug(blog_title)}.md"
-            st.download_button(
-                "⬇️ Download Markdown",
-                data=final_md.encode("utf-8"),
-                file_name=md_filename,
-                mime="text/markdown",
-            )
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    "⬇️ Download Markdown", data=final_md.encode("utf-8"),
+                    file_name=md_filename, mime="text/markdown", use_container_width=True,
+                )
+            with col2:
+                bundle = bundle_zip(final_md, md_filename, Path("images"))
+                st.download_button(
+                    "📦 Download Bundle (MD + images)", data=bundle,
+                    file_name=f"{safe_slug(blog_title)}_bundle.zip",
+                    mime="application/zip", use_container_width=True,
+                )
 
-            bundle = bundle_zip(final_md, md_filename, Path("images"))
-            st.download_button(
-                "📦 Download Bundle (MD + images)",
-                data=bundle,
-                file_name=f"{safe_slug(blog_title)}_bundle.zip",
-                mime="application/zip",
-            )
-
-    # --- Images tab ---
+    # ── Images tab ──
     with tab_images:
-        st.subheader("Images")
         specs = out.get("image_specs") or []
         images_dir = Path("images")
 
@@ -491,34 +816,42 @@ if out:
             st.info("No images generated for this blog.")
         else:
             if specs:
-                st.write("**Image plan:**")
-                st.json(specs)
+                st.markdown(f"**{len(specs)} image(s) planned**")
+                with st.expander("Image spec details"):
+                    st.json(specs)
 
             if images_dir.exists():
                 files = [p for p in images_dir.iterdir() if p.is_file()]
-                if not files:
-                    st.warning("images/ exists but is empty.")
+                if files:
+                    cols = st.columns(min(len(files), 2))
+                    for idx, p in enumerate(sorted(files)):
+                        cols[idx % 2].image(str(p), caption=p.name, use_container_width=True)
+                    z = images_zip(images_dir)
+                    if z:
+                        st.download_button(
+                            "⬇️ Download Images (zip)", data=z,
+                            file_name="images.zip", mime="application/zip",
+                        )
                 else:
-                    for p in sorted(files):
-                        st.image(str(p), caption=p.name, use_container_width=True)
+                    st.warning("images/ directory is empty.")
 
-                z = images_zip(images_dir)
-                if z:
-                    st.download_button(
-                        "⬇️ Download Images (zip)",
-                        data=z,
-                        file_name="images.zip",
-                        mime="application/zip",
-                    )
-
-    # --- Logs tab ---
+    # ── Logs tab ──
     with tab_logs:
-        st.subheader("Logs")
         if "logs" not in st.session_state:
             st.session_state["logs"] = []
         if logs:
             st.session_state["logs"].extend(logs)
+        st.text_area(
+            "Event log", value="\n\n".join(st.session_state["logs"][-80:]),
+            height=500, label_visibility="collapsed",
+        )
 
-        st.text_area("Event log", value="\n\n".join(st.session_state["logs"][-80:]), height=520)
 else:
-    st.info("Enter a topic and click **Generate Blog**.")
+    with tab_preview:
+        st.markdown("""
+<div style="text-align:center;padding:4rem 2rem;opacity:.4">
+    <div style="font-size:3rem;margin-bottom:1rem">✍️</div>
+    <div style="font-size:1.1rem;color:#64748b;font-weight:500">
+        Enter a topic in the sidebar and click <strong>Generate Blog</strong> to get started.
+    </div>
+</div>""", unsafe_allow_html=True)
