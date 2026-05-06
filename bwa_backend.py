@@ -113,7 +113,7 @@ class State(TypedDict):
 # -----------------------------
 # 2) LLM
 # -----------------------------
-DEFAULT_MODEL = "gemini-1.5-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 def get_llm(model: str | None = None) -> ChatGoogleGenerativeAI:
     api_key = os.getenv("GOOGLE_API_KEY")
