@@ -113,11 +113,18 @@ class State(TypedDict):
 # -----------------------------
 # 2) LLM
 # -----------------------------
-def get_llm() -> ChatGoogleGenerativeAI:
+DEFAULT_MODEL = "gemini-2.0-flash"
+
+def get_llm(model: str | None = None) -> ChatGoogleGenerativeAI:
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError("GOOGLE_API_KEY is not set. Add it in the sidebar API Keys section.")
-    return ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=api_key)
+    chosen = model or os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
+    return ChatGoogleGenerativeAI(
+        model=chosen,
+        google_api_key=api_key,
+        max_retries=3,
+    )
 
 # -----------------------------
 # 3) Router

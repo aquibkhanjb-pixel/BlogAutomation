@@ -180,8 +180,8 @@ def extract_title_from_md(md: str, fallback: str) -> str:
 # -----------------------------
 st.set_page_config(page_title="LangGraph Blog Writer", layout="wide")
 
-# Restore API keys from session state into os.environ on each rerun
-for _env_key in ("GOOGLE_API_KEY", "TAVILY_API_KEY"):
+# Restore API keys and model from session state into os.environ on each rerun
+for _env_key in ("GOOGLE_API_KEY", "TAVILY_API_KEY", "GEMINI_MODEL"):
     _stored = st.session_state.get(f"_env_{_env_key}", "")
     if _stored and not os.getenv(_env_key):
         os.environ[_env_key] = _stored
@@ -206,6 +206,21 @@ with st.sidebar:
             placeholder="tvly-...",
             help="Enables live web research for blog topics.",
         )
+        AVAILABLE_MODELS = [
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-pro",
+        ]
+        current_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        model_idx = AVAILABLE_MODELS.index(current_model) if current_model in AVAILABLE_MODELS else 0
+        model_choice = st.selectbox(
+            "Gemini Model",
+            AVAILABLE_MODELS,
+            index=model_idx,
+            help="Switch models if you hit a quota limit. gemini-2.0-flash-lite and gemini-1.5-flash have separate free-tier quotas.",
+        )
         if st.button("💾 Save Keys"):
             if google_key_input.strip():
                 os.environ["GOOGLE_API_KEY"] = google_key_input.strip()
@@ -219,6 +234,8 @@ with st.sidebar:
             else:
                 os.environ.pop("TAVILY_API_KEY", None)
                 st.session_state.pop("_env_TAVILY_API_KEY", None)
+            os.environ["GEMINI_MODEL"] = model_choice
+            st.session_state["_env_GEMINI_MODEL"] = model_choice
 
     if google_key_missing:
         st.warning("Add your Google API Key above to get started.")
