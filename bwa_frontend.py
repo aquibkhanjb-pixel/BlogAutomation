@@ -164,6 +164,17 @@ PIPELINE_STAGES = [
     ("generate_and_place_images", "Finish",  "7"),
 ]
 
+# Keys each node is responsible for — used to show focused output instead of the full state.
+NODE_OUTPUT_KEYS: dict[str, list[str]] = {
+    "router":                    ["mode", "needs_research", "queries", "recency_days"],
+    "research":                  ["evidence", "research_attempted"],
+    "orchestrator":              ["plan"],
+    "worker":                    ["sections"],
+    "merge_content":             ["merged_md"],
+    "decide_images":             ["md_with_placeholders", "image_specs"],
+    "generate_and_place_images": ["final"],
+}
+
 
 def _infer_node(cur: dict[str, Any], prev: dict[str, Any]) -> str | None:
     if cur.get("final") and not prev.get("final"):
@@ -767,7 +778,10 @@ if run_btn:
                 if node and node != active_node:
                     if active_node and active_node not in completed_nodes:
                         completed_nodes.append(active_node)
-                        st.session_state["node_outputs"][active_node] = dict(prev_state)
+                        _keys = NODE_OUTPUT_KEYS.get(active_node, list(prev_state.keys()))
+                        st.session_state["node_outputs"][active_node] = {
+                            k: prev_state[k] for k in _keys if k in prev_state
+                        }
                     active_node = node
                     label = node.replace("_", " ").title()
                     status_msg_ph.markdown(f"**{label}** running…")
@@ -792,7 +806,10 @@ if run_btn:
 
             elif kind == "final":
                 if active_node:
-                    st.session_state["node_outputs"][active_node] = dict(payload)
+                    _keys = NODE_OUTPUT_KEYS.get(active_node, list(payload.keys()))
+                    st.session_state["node_outputs"][active_node] = {
+                        k: payload[k] for k in _keys if k in payload
+                    }
                 all_keys = [s[0] for s in PIPELINE_STAGES]
                 _final_pipe = _pipeline_html(all_keys, None)
                 pipeline_ph.markdown(_final_pipe, unsafe_allow_html=True)

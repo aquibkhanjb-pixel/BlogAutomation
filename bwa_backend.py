@@ -254,7 +254,12 @@ def research_node(state: State) -> dict:
     if state.get("mode") == "open_book":
         as_of = date.fromisoformat(state["as_of"])
         cutoff = as_of - timedelta(days=int(state["recency_days"]))
-        evidence = [e for e in evidence if (d := _iso_to_date(e.published_at)) and d >= cutoff]
+        # Keep items with no date (Tavily often omits it) OR with a date that is recent enough.
+        # Only discard items that have a confirmed date AND it is too old.
+        evidence = [
+            e for e in evidence
+            if (d := _iso_to_date(e.published_at)) is None or d >= cutoff
+        ]
 
     return {"evidence": evidence, "research_attempted": True}
 
