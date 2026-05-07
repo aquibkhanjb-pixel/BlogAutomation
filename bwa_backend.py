@@ -1,6 +1,7 @@
 import operator
 import os
 import re
+import time
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TypedDict, Literal, Annotated
@@ -98,6 +99,7 @@ class State(TypedDict):
     recency_days: int
 
     # workers
+    parallel_workers: bool  # True = parallel Send(); False = sequential with sleep
     sections: Annotated[list[tuple[int, str]], operator.add]
 
     # set to True by research_node regardless of whether evidence was found
@@ -312,25 +314,80 @@ def orchestrator_node(state: State) -> dict:
 
 
 # -----------------------------
-# 6) Fanout
+# 6) Fanout / sequential router
 # -----------------------------
-def fanout(state: State):
+def route_after_orchestrator(state: State):
     assert state["plan"] is not None
-    return [
-        Send(
-            "worker",
-            {
-                "task": task.model_dump(),
-                "topic": state["topic"],
-                "mode": state["mode"],
-                "as_of": state["as_of"],
-                "recency_days": state["recency_days"],
-                "plan": state["plan"].model_dump(),
-                "evidence": [e.model_dump() for e in state.get("evidence", [])],
-            },
-        )
-        for task in state["plan"].tasks
-    ]
+    if state.get("parallel_workers", False):
+        # Parallel: dispatch one worker per section simultaneously (requires paid API).
+        return [
+            Send(
+                "worker",
+                {
+                    "task": task.model_dump(),
+                    "topic": state["topic"],
+                    "mode": state["mode"],
+                    "as_of": state["as_of"],
+                    "recency_days": state["recency_days"],
+                    "plan": state["plan"].model_dump(),
+                    "evidence": [e.model_dump() for e in state.get("evidence", [])],
+                },
+            )
+            for task in state["plan"].tasks
+        ]
+    # Sequential (default for free tier): a single node writes all sections in order.
+    return "sequential_writer"
+
+
+# -----------------------------
+# 6b) Sequential writer (free-tier safe)
+# -----------------------------
+_FREE_TIER_SLEEP = 5  # seconds between LLM calls to stay within 10 RPM free quota
+
+def sequential_writer_node(state: State) -> dict:
+    plan = state["plan"]
+    assert plan is not None
+    evidence = state.get("evidence") or []
+
+    evidence_text = "\n".join(
+        f"- {e.title} | {e.url} | {e.published_at or 'date:unknown'}"
+        for e in evidence[:20]
+    )
+
+    sections: list[tuple[int, str]] = []
+    for i, task in enumerate(plan.tasks):
+        bullets_text = "\n- " + "\n- ".join(task.bullets)
+        section_md = get_llm().invoke(
+            [
+                SystemMessage(content=WORKER_SYSTEM),
+                HumanMessage(
+                    content=(
+                        f"Blog title: {plan.blog_title}\n"
+                        f"Audience: {plan.audience}\n"
+                        f"Tone: {plan.tone}\n"
+                        f"Blog kind: {plan.blog_kind}\n"
+                        f"Constraints: {plan.constraints}\n"
+                        f"Topic: {state['topic']}\n"
+                        f"Mode: {state.get('mode')}\n"
+                        f"As-of: {state.get('as_of')} (recency_days={state.get('recency_days')})\n\n"
+                        f"Section title: {task.title}\n"
+                        f"Goal: {task.goal}\n"
+                        f"Target words: {task.target_words}\n"
+                        f"Tags: {task.tags}\n"
+                        f"requires_research: {task.requires_research}\n"
+                        f"requires_citations: {task.requires_citations}\n"
+                        f"requires_code: {task.requires_code}\n"
+                        f"Bullets:{bullets_text}\n\n"
+                        f"Evidence (ONLY cite these URLs):\n{evidence_text}\n"
+                    )
+                ),
+            ]
+        ).content.strip()
+        sections.append((task.id, section_md))
+        if i < len(plan.tasks) - 1:
+            time.sleep(_FREE_TIER_SLEEP)
+
+    return {"sections": sections}
 
 # -----------------------------
 # 7) Worker
@@ -563,14 +620,16 @@ g.add_node("router", router_node)
 g.add_node("research", research_node)
 g.add_node("orchestrator", orchestrator_node)
 g.add_node("worker", worker_node)
+g.add_node("sequential_writer", sequential_writer_node)
 g.add_node("reducer", reducer_subgraph)
 
 g.add_edge(START, "router")
 g.add_conditional_edges("router", route_next, {"research": "research", "orchestrator": "orchestrator"})
 g.add_edge("research", "orchestrator")
 
-g.add_conditional_edges("orchestrator", fanout, ["worker"])
+g.add_conditional_edges("orchestrator", route_after_orchestrator, ["worker", "sequential_writer"])
 g.add_edge("worker", "reducer")
+g.add_edge("sequential_writer", "reducer")
 g.add_edge("reducer", END)
 
 app = g.compile()

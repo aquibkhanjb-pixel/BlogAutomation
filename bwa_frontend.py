@@ -170,6 +170,7 @@ NODE_OUTPUT_KEYS: dict[str, list[str]] = {
     "research":                  ["evidence", "research_attempted"],
     "orchestrator":              ["plan"],
     "worker":                    ["sections"],
+    "sequential_writer":         ["sections"],
     "merge_content":             ["merged_md"],
     "decide_images":             ["md_with_placeholders", "image_specs"],
     "generate_and_place_images": ["final"],
@@ -183,6 +184,7 @@ def _infer_node(cur: dict[str, Any], prev: dict[str, Any]) -> str | None:
         return "decide_images"
     if cur.get("merged_md") and not prev.get("merged_md"):
         return "merge_content"
+    # Both parallel workers and sequential_writer produce sections — map both to "worker" stage.
     if len(cur.get("sections") or []) > len(prev.get("sections") or []):
         return "worker"
     if cur.get("plan") and not prev.get("plan"):
@@ -642,6 +644,20 @@ with st.sidebar:
     )
     if generate_images:
         st.caption("⚠️ Paid feature — ensure billing is enabled on your Google Cloud project.")
+
+    parallel_workers = st.toggle(
+        "Parallel section writing",
+        value=False,
+        help=(
+            "OFF (default): sections written one-by-one with a short delay — safe for free-tier Gemini API (10 RPM). "
+            "ON: all sections written simultaneously — faster but exhausts free quota quickly. Only enable with a paid API key."
+        ),
+    )
+    if parallel_workers:
+        st.caption("⚠️ Parallel mode — ensure you have a paid API key or sufficient quota.")
+    else:
+        st.caption("Sequential mode — free-tier safe (sections written one at a time).")
+
     run_btn = st.button("🚀 Generate Blog", type="primary", use_container_width=True)
 
     st.markdown("---")
@@ -750,6 +766,7 @@ if run_btn:
         "topic": topic.strip(), "mode": "", "needs_research": False,
         "queries": [], "evidence": [], "plan": None, "as_of": as_of.isoformat(),
         "recency_days": 7, "sections": [], "generate_images": generate_images,
+        "parallel_workers": parallel_workers,
         "merged_md": "", "md_with_placeholders": "", "image_specs": [], "final": "",
         "research_attempted": False,
     }
