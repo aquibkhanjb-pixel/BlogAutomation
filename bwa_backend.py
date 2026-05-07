@@ -175,11 +175,12 @@ def route_next(state: State) -> str:
 # 4) Research (Tavily)
 # -----------------------------
 def _tavily_search(query: str, max_results: int = 5) -> list[dict]:
-    if not os.getenv("TAVILY_API_KEY"):
+    api_key = os.getenv("TAVILY_API_KEY")
+    if not api_key:
         return []
     try:
         from langchain_community.tools.tavily_search import TavilySearchResults  # type: ignore
-        tool = TavilySearchResults(max_results=max_results)
+        tool = TavilySearchResults(max_results=max_results, tavily_api_key=api_key)
         results = tool.invoke({"query": query})
         out: list[dict] = []
         for r in results or []:
@@ -193,7 +194,9 @@ def _tavily_search(query: str, max_results: int = 5) -> list[dict]:
                 }
             )
         return out
-    except Exception:
+    except Exception as _e:
+        import sys
+        print(f"[Tavily] query='{query}' failed: {_e}", file=sys.stderr)
         return []
 
 def _iso_to_date(s: str | None) -> date | None:

@@ -732,6 +732,7 @@ if run_btn:
     pipeline_ph = st.empty()
     stats_ph    = st.empty()
     status      = st.status("Initializing pipeline…", expanded=True)
+    status_msg_ph = status.empty()
 
     pipeline_ph.markdown(_pipeline_html([], None), unsafe_allow_html=True)
 
@@ -739,6 +740,7 @@ if run_btn:
     active_node: str | None    = None
     prev_state: dict[str, Any] = {}
     current_state: dict[str, Any] = {}
+    st.session_state["node_outputs"] = {}
 
     try:
         for kind, payload in try_stream(app, inputs):
@@ -749,9 +751,10 @@ if run_btn:
                 if node and node != active_node:
                     if active_node and active_node not in completed_nodes:
                         completed_nodes.append(active_node)
+                        st.session_state["node_outputs"][active_node] = dict(prev_state)
                     active_node = node
                     label = node.replace("_", " ").title()
-                    status.write(f"**{label}** running…")
+                    status_msg_ph.markdown(f"**{label}** running…")
 
                 sections = current_state.get("sections") or []
                 plan = current_state.get("plan")
@@ -772,9 +775,12 @@ if run_btn:
                 prev_state = dict(current_state)
 
             elif kind == "final":
+                if active_node:
+                    st.session_state["node_outputs"][active_node] = dict(payload)
                 all_keys = [s[0] for s in PIPELINE_STAGES]
                 pipeline_ph.markdown(_pipeline_html(all_keys, None), unsafe_allow_html=True)
                 stats_ph.empty()
+                status_msg_ph.empty()
                 st.session_state["last_out"] = payload
                 status.update(label="✅ Blog generated successfully!", state="complete", expanded=False)
                 log("[final] received final state")
@@ -813,9 +819,21 @@ if out:
 
             st.markdown(f"### {plan_dict.get('blog_title', 'Blog Plan')}")
             c1, c2, c3 = st.columns(3)
-            c1.metric("Audience", plan_dict.get("audience", "—"))
-            c2.metric("Tone", plan_dict.get("tone", "—"))
-            c3.metric("Kind", plan_dict.get("blog_kind", "—"))
+            for _col, _lbl, _key in [
+                (c1, "Audience", "audience"),
+                (c2, "Tone", "tone"),
+                (c3, "Kind", "blog_kind"),
+            ]:
+                _val = plan_dict.get(_key) or "—"
+                _col.markdown(
+                    f"""<div style="background:#fff;border:1px solid #e9ecf5;border-radius:12px;"""
+                    f"""padding:.9rem 1.1rem;box-shadow:0 1px 4px rgba(0,0,0,.05);min-height:72px">"""
+                    f"""<div style="font-size:.65rem;color:#94a3b8;font-weight:600;letter-spacing:.06em;"""
+                    f"""text-transform:uppercase;margin-bottom:5px">{_lbl}</div>"""
+                    f"""<div style="font-weight:700;color:#4f46e5;font-size:.9rem;"""
+                    f"""word-break:break-word;line-height:1.4">{_val}</div></div>""",
+                    unsafe_allow_html=True,
+                )
 
             tasks = plan_dict.get("tasks", [])
             if tasks:
@@ -929,13 +947,31 @@ if out:
 
     # ── Logs tab ──
     with tab_logs:
+        node_outputs = st.session_state.get("node_outputs", {})
+        if node_outputs:
+            st.markdown("#### Node Outputs")
+            _stage_labels = {k: lbl for k, lbl, _ in PIPELINE_STAGES}
+            _node_keys = list(node_outputs.keys())
+            _display_labels = [_stage_labels.get(k, k.replace("_", " ").title()) for k in _node_keys]
+            _sel_idx = st.selectbox(
+                "Select a pipeline stage to inspect its output:",
+                range(len(_node_keys)),
+                format_func=lambda i: _display_labels[i],
+                key="node_inspect_select",
+            )
+            if _sel_idx is not None:
+                _snap = node_outputs[_node_keys[_sel_idx]]
+                _snap_clean = json.loads(json.dumps(_snap, default=str))
+                st.json(_snap_clean, expanded=1)
+            st.markdown("---")
+
         if "logs" not in st.session_state:
             st.session_state["logs"] = []
         if logs:
             st.session_state["logs"].extend(logs)
         st.text_area(
             "Event log", value="\n\n".join(st.session_state["logs"][-80:]),
-            height=500, label_visibility="collapsed",
+            height=400, label_visibility="collapsed",
         )
 
 else:
