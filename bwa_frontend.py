@@ -533,10 +533,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Restore env keys from session state on each rerun
+# Always restore from session state so a newly saved key takes effect immediately.
 for _env_key in ("GOOGLE_API_KEY", "TAVILY_API_KEY", "GEMINI_MODEL"):
     _stored = st.session_state.get(f"_env_{_env_key}", "")
-    if _stored and not os.getenv(_env_key):
+    if _stored:
         os.environ[_env_key] = _stored
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
@@ -573,7 +573,8 @@ with st.sidebar:
             if google_key_input.strip():
                 os.environ["GOOGLE_API_KEY"] = google_key_input.strip()
                 st.session_state["_env_GOOGLE_API_KEY"] = google_key_input.strip()
-                st.success("Keys saved!")
+                tail = google_key_input.strip()[-4:]
+                st.success(f"Keys saved! Active key ends in …{tail}")
             else:
                 st.warning("Google API Key is required.")
             if tavily_key_input.strip():
@@ -584,6 +585,11 @@ with st.sidebar:
                 st.session_state.pop("_env_TAVILY_API_KEY", None)
             os.environ["GEMINI_MODEL"] = model_choice
             st.session_state["_env_GEMINI_MODEL"] = model_choice
+
+        # Show which key is currently active
+        active_key = os.getenv("GOOGLE_API_KEY", "")
+        if active_key:
+            st.caption(f"Active key: …{active_key[-4:]}")
 
     if google_key_missing:
         st.warning("Add your Google API Key above to get started.")
