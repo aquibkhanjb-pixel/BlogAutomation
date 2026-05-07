@@ -857,8 +857,10 @@ out = st.session_state.get("last_out")
 
 if out:
     # ── Persistent pipeline + node inspector ──────────────────────────────
+    # Only render persisted pipeline on reruns — during an active run the live
+    # pipeline_ph placeholder is already visible above, so skip to avoid duplication.
     _last_pipe = st.session_state.get("last_pipeline_html")
-    if _last_pipe:
+    if _last_pipe and not run_btn:
         st.markdown(_last_pipe, unsafe_allow_html=True)
         _node_outputs = st.session_state.get("node_outputs", {})
         if _node_outputs:
