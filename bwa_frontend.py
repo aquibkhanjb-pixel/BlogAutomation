@@ -591,6 +591,7 @@ with st.sidebar:
             "Gemini Model", AVAILABLE_MODELS, index=model_idx,
             help="gemini-2.5-flash recommended. Switch to flash-lite on quota errors.",
         )
+        st.caption("Keys are applied automatically when you click Generate Blog. Use Save to persist them across page reloads.")
         if st.button("💾 Save Keys"):
             if google_key_input.strip():
                 os.environ["GOOGLE_API_KEY"] = google_key_input.strip()
@@ -717,11 +718,21 @@ def log(msg: str):
 # ── Generation handler ─────────────────────────────────────────────────────
 
 if run_btn:
+    # Auto-apply whatever is currently in the key inputs — no need to click Save Keys first.
+    if google_key_input.strip():
+        os.environ["GOOGLE_API_KEY"] = google_key_input.strip()
+        st.session_state["_env_GOOGLE_API_KEY"] = google_key_input.strip()
+    if tavily_key_input.strip():
+        os.environ["TAVILY_API_KEY"] = tavily_key_input.strip()
+        st.session_state["_env_TAVILY_API_KEY"] = tavily_key_input.strip()
+    os.environ["GEMINI_MODEL"] = model_choice
+    st.session_state["_env_GEMINI_MODEL"] = model_choice
+
     if not topic.strip():
         st.warning("Please enter a topic.")
         st.stop()
     if not os.getenv("GOOGLE_API_KEY"):
-        st.error("Google API Key is not set. Enter it in the sidebar and click 💾 Save Keys.")
+        st.error("Google API Key is not set. Enter it in the sidebar.")
         st.stop()
 
     inputs: dict[str, Any] = {
