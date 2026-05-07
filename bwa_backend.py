@@ -101,6 +101,7 @@ class State(TypedDict):
     sections: Annotated[list[tuple[int, str]], operator.add]
 
     # reducer/image
+    generate_images: bool
     merged_md: str
     md_with_placeholders: str
     image_specs: list[dict]
@@ -409,6 +410,9 @@ Return strictly GlobalImagePlan.
 """
 
 def decide_images(state: State) -> dict:
+    if not state.get("generate_images", False):
+        return {"md_with_placeholders": state["merged_md"], "image_specs": []}
+
     planner = get_llm().with_structured_output(GlobalImagePlan)
     merged_md = state["merged_md"]
     plan = state["plan"]

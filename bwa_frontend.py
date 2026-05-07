@@ -601,6 +601,13 @@ with st.sidebar:
         placeholder="e.g. How Transformer attention works, or\nWeekly AI news roundup May 2026",
     )
     as_of = st.date_input("As-of date", value=date.today())
+    generate_images = st.toggle(
+        "Generate images",
+        value=False,
+        help="Requires a paid Google Cloud billing account. Image generation is NOT available on the free Gemini API tier.",
+    )
+    if generate_images:
+        st.caption("⚠️ Paid feature — ensure billing is enabled on your Google Cloud project.")
     run_btn = st.button("🚀 Generate Blog", type="primary", use_container_width=True)
 
     st.markdown("---")
@@ -668,8 +675,8 @@ if run_btn:
     inputs: dict[str, Any] = {
         "topic": topic.strip(), "mode": "", "needs_research": False,
         "queries": [], "evidence": [], "plan": None, "as_of": as_of.isoformat(),
-        "recency_days": 7, "sections": [], "merged_md": "",
-        "md_with_placeholders": "", "image_specs": [], "final": "",
+        "recency_days": 7, "sections": [], "generate_images": generate_images,
+        "merged_md": "", "md_with_placeholders": "", "image_specs": [], "final": "",
     }
 
     pipeline_ph = st.empty()
