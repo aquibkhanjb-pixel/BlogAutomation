@@ -184,7 +184,8 @@ def _infer_node(cur: dict[str, Any], prev: dict[str, Any]) -> str | None:
 
 
 def _pipeline_html(completed: list[str], active: str | None,
-                   worker_info: tuple[int, int] | None = None) -> str:
+                   worker_info: tuple[int, int] | None = None,
+                   error: bool = False) -> str:
     items = ""
     for i, (key, label, num) in enumerate(PIPELINE_STAGES):
         if key == "worker" and worker_info:
@@ -195,6 +196,8 @@ def _pipeline_html(completed: list[str], active: str | None,
 
         if key in completed:
             cls, badge = "done", "✓"
+        elif key == active and error:
+            cls, badge = "error", "✕"
         elif key == active:
             cls = "active"
             badge = f"<span class='dot-spin'>{num}</span>"
@@ -210,9 +213,11 @@ def _pipeline_html(completed: list[str], active: str | None,
             <div class="p-name">{label}{extra}</div>
         </div>{connector}"""
 
+    banner = '<div class="pipe-error-banner">Pipeline stopped — see error below</div>' if error else ""
     return f"""
     <div class="pipeline-shell">
         <div class="pipeline-inner">{items}</div>
+        {banner}
     </div>"""
 
 
@@ -480,6 +485,21 @@ hr { border:none !important; border-top:1px solid #e9ecf5 !important; margin:1.2
 .dot-spin { display:inline-block; animation:num-spin 1.4s linear infinite; }
 @keyframes num-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 
+/* Error step */
+.p-step.error .p-dot {
+    background:linear-gradient(135deg,#dc2626,#ef4444);
+    color:#fff; border:none;
+    box-shadow:0 0 14px rgba(239,68,68,.4);
+}
+.p-step.error .p-name { color:#ef4444; font-weight:700; }
+
+/* Error banner */
+.pipe-error-banner {
+    margin-top:10px; padding:8px 14px; border-radius:8px;
+    background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.3);
+    color:#b91c1c; font-size:.82rem; font-weight:600; text-align:center;
+}
+
 /* ── Live-stats row ── */
 .stat-row {
     display:flex; gap:10px; margin:.6rem 0 1rem; flex-wrap:wrap;
@@ -613,6 +633,10 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📂 Past Blogs")
     past_files = list_past_blogs()
+
+    if "confirm_delete" not in st.session_state:
+        st.session_state["confirm_delete"] = None
+
     if not past_files:
         st.caption("No saved blogs yet.")
         selected_md_file = None
@@ -634,15 +658,41 @@ with st.sidebar:
         )
         selected_md_file = file_by_label.get(selected_label)
 
-        if st.button("📂 Load selected blog", use_container_width=True):
-            if selected_md_file:
-                md_text = read_md_file(selected_md_file)
-                st.session_state["last_out"] = {
-                    "plan": None, "evidence": [], "image_specs": [], "final": md_text,
-                }
-                st.session_state["topic_prefill"] = extract_title_from_md(
-                    md_text, selected_md_file.stem
-                )
+        col_load, col_del = st.columns(2)
+        with col_load:
+            if st.button("📂 Load", use_container_width=True):
+                if selected_md_file:
+                    md_text = read_md_file(selected_md_file)
+                    st.session_state["last_out"] = {
+                        "plan": None, "evidence": [], "image_specs": [], "final": md_text,
+                    }
+                    st.session_state["topic_prefill"] = extract_title_from_md(
+                        md_text, selected_md_file.stem
+                    )
+                    st.session_state["confirm_delete"] = None
+
+        with col_del:
+            if st.button("🗑️ Delete", use_container_width=True):
+                st.session_state["confirm_delete"] = str(selected_md_file)
+
+        # Confirmation dialog
+        if st.session_state["confirm_delete"] == str(selected_md_file):
+            st.warning(f"Delete **{selected_md_file.name}**?")
+            yes_col, no_col = st.columns(2)
+            with yes_col:
+                if st.button("Yes, delete", type="primary", use_container_width=True):
+                    try:
+                        selected_md_file.unlink()
+                        st.session_state["confirm_delete"] = None
+                        if st.session_state.get("last_out") and st.session_state["last_out"].get("_source") == str(selected_md_file):
+                            st.session_state["last_out"] = None
+                        st.success("Deleted.")
+                        st.rerun()
+                    except Exception as _de:
+                        st.error(f"Could not delete: {_de}")
+            with no_col:
+                if st.button("Cancel", use_container_width=True):
+                    st.session_state["confirm_delete"] = None
 
 # ── Session defaults ───────────────────────────────────────────────────────
 
@@ -730,6 +780,12 @@ if run_btn:
                 log("[final] received final state")
 
     except Exception as _err:
+        pipeline_ph.markdown(
+            _pipeline_html(completed_nodes, active_node, error=True),
+            unsafe_allow_html=True,
+        )
+        stats_ph.empty()
+        status.update(label="Pipeline failed", state="error", expanded=True)
         cause = _err.__cause__ or _err
         st.error(f"**Graph error** `{type(_err).__name__}`: {_err}")
         if cause is not _err:
@@ -785,18 +841,31 @@ if out:
     with tab_evidence:
         evidence = out.get("evidence") or []
         if not evidence:
-            st.info("No evidence (closed-book mode or no Tavily key).")
+            st.info("No evidence collected — either closed-book mode, no Tavily key set, or no results found.")
         else:
-            st.markdown(f"**{len(evidence)} sources collected**")
-            rows = []
-            for e in evidence:
+            st.markdown(f"**{len(evidence)} sources collected** — click any item to see full details")
+            for idx, e in enumerate(evidence):
                 if hasattr(e, "model_dump"):
-                    e = e.model_dump()
-                rows.append({
-                    "Title": e.get("title"), "Date": e.get("published_at"),
-                    "Source": e.get("source"), "URL": e.get("url"),
-                })
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                    e_dict = e.model_dump()
+                elif isinstance(e, dict):
+                    e_dict = e
+                else:
+                    e_dict = json.loads(json.dumps(e, default=str))
+
+                title = e_dict.get("title") or f"Source {idx + 1}"
+                source = e_dict.get("source") or ""
+                date_str = e_dict.get("published_at") or ""
+                label = f"**{idx + 1}.** {title}"
+                if source:
+                    label += f"  ·  {source}"
+                if date_str:
+                    label += f"  ·  {date_str}"
+
+                with st.expander(label):
+                    url = e_dict.get("url", "")
+                    if url:
+                        st.markdown(f"[{url}]({url})")
+                    st.json(e_dict)
 
     # ── Preview tab ──
     with tab_preview:

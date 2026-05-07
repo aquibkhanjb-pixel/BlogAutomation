@@ -166,7 +166,10 @@ def router_node(state: State) -> dict:
     }
 
 def route_next(state: State) -> str:
-    return "research" if state["needs_research"] else "orchestrator"
+    # open_book and hybrid always need research regardless of LLM flag
+    if state.get("mode") in ("open_book", "hybrid") or state.get("needs_research"):
+        return "research"
+    return "orchestrator"
 
 # -----------------------------
 # 4) Research (Tavily)
