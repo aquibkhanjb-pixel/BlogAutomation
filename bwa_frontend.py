@@ -176,6 +176,8 @@ def _infer_node(cur: dict[str, Any], prev: dict[str, Any]) -> str | None:
         return "worker"
     if cur.get("plan") and not prev.get("plan"):
         return "orchestrator"
+    if cur.get("research_attempted") and not prev.get("research_attempted"):
+        return "research"
     if (cur.get("evidence") or []) and not (prev.get("evidence") or []):
         return "research"
     if cur.get("mode") and not prev.get("mode"):
@@ -727,7 +729,10 @@ if run_btn:
         "queries": [], "evidence": [], "plan": None, "as_of": as_of.isoformat(),
         "recency_days": 7, "sections": [], "generate_images": generate_images,
         "merged_md": "", "md_with_placeholders": "", "image_specs": [], "final": "",
+        "research_attempted": False,
     }
+    st.session_state.pop("last_pipeline_html", None)
+    st.session_state["node_outputs"] = {}
 
     pipeline_ph = st.empty()
     stats_ph    = st.empty()
@@ -778,7 +783,9 @@ if run_btn:
                 if active_node:
                     st.session_state["node_outputs"][active_node] = dict(payload)
                 all_keys = [s[0] for s in PIPELINE_STAGES]
-                pipeline_ph.markdown(_pipeline_html(all_keys, None), unsafe_allow_html=True)
+                _final_pipe = _pipeline_html(all_keys, None)
+                pipeline_ph.markdown(_final_pipe, unsafe_allow_html=True)
+                st.session_state["last_pipeline_html"] = _final_pipe
                 stats_ph.empty()
                 status_msg_ph.empty()
                 st.session_state["last_out"] = payload
@@ -804,6 +811,27 @@ if run_btn:
 out = st.session_state.get("last_out")
 
 if out:
+    # ── Persistent pipeline + node inspector ──────────────────────────────
+    _last_pipe = st.session_state.get("last_pipeline_html")
+    if _last_pipe:
+        st.markdown(_last_pipe, unsafe_allow_html=True)
+        _node_outputs = st.session_state.get("node_outputs", {})
+        if _node_outputs:
+            _slabels = {k: lbl for k, lbl, _ in PIPELINE_STAGES}
+            _nkeys = list(_node_outputs.keys())
+            _nlabels = [_slabels.get(k, k.replace("_", " ").title()) for k in _nkeys]
+            _nsel = st.selectbox(
+                "Select a node to inspect its output:",
+                range(len(_nkeys)),
+                format_func=lambda i: _nlabels[i],
+                key="node_inspect_main",
+            )
+            if _nsel is not None:
+                _snap = json.loads(json.dumps(_node_outputs[_nkeys[_nsel]], default=str))
+                with st.expander(f"Output: {_nlabels[_nsel]}", expanded=True):
+                    st.json(_snap, expanded=2)
+        st.markdown("---")
+
     # ── Plan tab ──
     with tab_plan:
         plan_obj = out.get("plan")
@@ -859,7 +887,21 @@ if out:
     with tab_evidence:
         evidence = out.get("evidence") or []
         if not evidence:
-            st.info("No evidence collected — either closed-book mode, no Tavily key set, or no results found.")
+            _mode = (out.get("mode") or "").replace("_", " ").title()
+            if out.get("research_attempted"):
+                st.warning(
+                    f"**Research node ran ({_mode} mode) but returned no evidence.** "
+                    "Likely causes: Tavily API key is invalid or expired, "
+                    "or all search results were filtered out by the recency window. "
+                    "Re-enter your Tavily key in the sidebar and try again."
+                )
+            elif (out.get("mode") or "") in ("open_book", "hybrid"):
+                st.warning(
+                    "**Research was needed but no Tavily key was found.** "
+                    "Add your Tavily API Key in the sidebar to enable web research."
+                )
+            else:
+                st.info("Closed-book mode — no web research needed for this topic.")
         else:
             st.markdown(f"**{len(evidence)} sources collected** — click any item to see full details")
             for idx, e in enumerate(evidence):
@@ -947,24 +989,6 @@ if out:
 
     # ── Logs tab ──
     with tab_logs:
-        node_outputs = st.session_state.get("node_outputs", {})
-        if node_outputs:
-            st.markdown("#### Node Outputs")
-            _stage_labels = {k: lbl for k, lbl, _ in PIPELINE_STAGES}
-            _node_keys = list(node_outputs.keys())
-            _display_labels = [_stage_labels.get(k, k.replace("_", " ").title()) for k in _node_keys]
-            _sel_idx = st.selectbox(
-                "Select a pipeline stage to inspect its output:",
-                range(len(_node_keys)),
-                format_func=lambda i: _display_labels[i],
-                key="node_inspect_select",
-            )
-            if _sel_idx is not None:
-                _snap = node_outputs[_node_keys[_sel_idx]]
-                _snap_clean = json.loads(json.dumps(_snap, default=str))
-                st.json(_snap_clean, expanded=1)
-            st.markdown("---")
-
         if "logs" not in st.session_state:
             st.session_state["logs"] = []
         if logs:

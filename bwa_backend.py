@@ -100,6 +100,9 @@ class State(TypedDict):
     # workers
     sections: Annotated[list[tuple[int, str]], operator.add]
 
+    # set to True by research_node regardless of whether evidence was found
+    research_attempted: bool
+
     # reducer/image
     generate_images: bool
     merged_md: str
@@ -226,7 +229,7 @@ def research_node(state: State) -> dict:
         raw.extend(_tavily_search(q, max_results=6))
 
     if not raw:
-        return {"evidence": []}
+        return {"evidence": [], "research_attempted": True}
 
     extractor = get_llm().with_structured_output(EvidencePack)
     pack = extractor.invoke(
@@ -253,7 +256,7 @@ def research_node(state: State) -> dict:
         cutoff = as_of - timedelta(days=int(state["recency_days"]))
         evidence = [e for e in evidence if (d := _iso_to_date(e.published_at)) and d >= cutoff]
 
-    return {"evidence": evidence}
+    return {"evidence": evidence, "research_attempted": True}
 
 # -----------------------------
 # 5) Orchestrator (Plan)
